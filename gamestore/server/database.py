@@ -3,9 +3,6 @@ import hashlib
 import os
 import secrets
 
-# ──────────────────────────────────────────────
-#  In-memory session store  { session_id: { user_id, first_name, last_name, email } }
-# ──────────────────────────────────────────────
 SESSION_STORE = {}
 
 
@@ -16,10 +13,6 @@ class CardDatabase:
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.create_tables()
 
-    # ──────────────────────────────────────────
-    #  Schema
-    # ──────────────────────────────────────────
-
     def create_tables(self):
         self.conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -27,7 +20,8 @@ class CardDatabase:
             first_name      TEXT    NOT NULL,
             last_name       TEXT    NOT NULL,
             email           TEXT    NOT NULL UNIQUE,
-            password_hash   TEXT    NOT NULL
+            password_hash   TEXT    NOT NULL,
+            role            TEXT    NOT NULL DEFAULT 'user'
         )
         """)
 
@@ -42,27 +36,30 @@ class CardDatabase:
             rarity    TEXT
         )
         """)
+
+        self.ensure_role_column()
         self.conn.commit()
 
-    # ──────────────────────────────────────────
-    #  Password helpers  (PBKDF2-HMAC-SHA256)
-    # ──────────────────────────────────────────
+    def ensure_role_column(self):
+        cursor = self.conn.execute("PRAGMA table_info(users)")
+        columns = [row["name"] for row in cursor.fetchall()]
+        if "role" not in columns:
+            self.conn.execute(
+                "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"
+            )
+            self.conn.commit()
 
-    def hash_password(self, plain_text: str) -> str:
-        """
-        Returns a self-contained string:  <hex-salt>$<hex-digest>
-        Algorithm : PBKDF2-HMAC-SHA256, 260 000 iterations, 32-byte salt
-        """
+    def hash_password(self, plain_text):
         salt = os.urandom(32)
         digest = hashlib.pbkdf2_hmac(
             "sha256",
             plain_text.encode("utf-8"),
             salt,
-            iterations=260_000,
+            260000
         )
         return salt.hex() + "$" + digest.hex()
 
-    def verify_password(self, plain_text: str, stored_hash: str) -> bool:
+    def verify_password(self, plain_text, stored_hash):
         try:
             salt_hex, digest_hex = stored_hash.split("$")
             salt = bytes.fromhex(salt_hex)
@@ -71,94 +68,96 @@ class CardDatabase:
                 "sha256",
                 plain_text.encode("utf-8"),
                 salt,
-                iterations=260_000,
+                260000
             )
             return secrets.compare_digest(candidate, expected)
         except Exception:
             return False
 
-    # ──────────────────────────────────────────
-    #  User operations
-    # ──────────────────────────────────────────
-
-    def email_exists(self, email: str) -> bool:
+    def email_exists(self, email):
         cursor = self.conn.execute(
-            "SELECT id FROM users WHERE email = ?", (email.lower(),)
+            "SELECT id FROM users WHERE email = ?",
+            (email.lower(),)
         )
         return cursor.fetchone() is not None
 
-    def create_user(self, data: dict):
-        """Returns new user dict (without password hash) or raises on duplicate email."""
+    def create_user(self, data):
         if self.email_exists(data["email"]):
-            return None  # caller checks for None → 409
+            return None
 
         pw_hash = self.hash_password(data["password"])
+
         cursor = self.conn.execute(
             """
-            INSERT INTO users (first_name, last_name, email, password_hash)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO users (first_name, last_name, email, password_hash, role)
+            VALUES (?, ?, ?, ?, ?)
             """,
             (
                 data["first_name"],
                 data["last_name"],
                 data["email"].lower(),
                 pw_hash,
-            ),
+                "user"
+            )
         )
         self.conn.commit()
         return self.get_user_public(cursor.lastrowid)
 
-    def authenticate_user(self, email: str, password: str):
-        """Returns public user dict on success, None on failure."""
+    def authenticate_user(self, email, password):
         cursor = self.conn.execute(
-            "SELECT * FROM users WHERE email = ?", (email.lower(),)
+            "SELECT * FROM users WHERE email = ?",
+            (email.lower(),)
         )
         row = cursor.fetchone()
+
         if not row:
             return None
+
         user = dict(row)
+
         if not self.verify_password(password, user["password_hash"]):
             return None
+
         return {
             "id": user["id"],
             "first_name": user["first_name"],
             "last_name": user["last_name"],
             "email": user["email"],
+            "role": user["role"]
         }
 
-    def get_user_public(self, user_id: int):
+    def get_user_public(self, user_id):
         cursor = self.conn.execute(
-            "SELECT id, first_name, last_name, email FROM users WHERE id = ?",
-            (user_id,),
+            "SELECT id, first_name, last_name, email, role FROM users WHERE id = ?",
+            (user_id,)
         )
         row = cursor.fetchone()
         return dict(row) if row else None
 
-    # ──────────────────────────────────────────
-    #  Session helpers
-    # ──────────────────────────────────────────
+    def set_user_role(self, email, role):
+        self.conn.execute(
+            "UPDATE users SET role = ? WHERE email = ?",
+            (role, email.lower())
+        )
+        self.conn.commit()
 
-    def create_session(self, user: dict) -> str:
+    def create_session(self, user):
         session_id = secrets.token_hex(32)
         SESSION_STORE[session_id] = user
         return session_id
 
-    def get_session(self, session_id: str):
+    def get_session(self, session_id):
         return SESSION_STORE.get(session_id)
 
-    def delete_session(self, session_id: str):
+    def delete_session(self, session_id):
         SESSION_STORE.pop(session_id, None)
-
-    # ──────────────────────────────────────────
-    #  Card operations
-    # ──────────────────────────────────────────
 
     def get_all_cards(self):
         cursor = self.conn.execute("SELECT * FROM cards")
         return [dict(row) for row in cursor.fetchall()]
 
     def get_card(self, card_id):
-        cursor = self.conn.execute("SELECT * FROM cards WHERE id=?", (card_id,))
+        cursor = self.conn.execute("SELECT * FROM cards WHERE id = ?", (card_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
 
@@ -174,8 +173,8 @@ class CardDatabase:
                 data["condition"],
                 data["price"],
                 data["quantity"],
-                data["rarity"],
-            ),
+                data["rarity"]
+            )
         )
         self.conn.commit()
         return self.get_card(cursor.lastrowid)
@@ -184,8 +183,8 @@ class CardDatabase:
         self.conn.execute(
             """
             UPDATE cards
-            SET name=?, set_name=?, condition=?, price=?, quantity=?, rarity=?
-            WHERE id=?
+            SET name = ?, set_name = ?, condition = ?, price = ?, quantity = ?, rarity = ?
+            WHERE id = ?
             """,
             (
                 data["name"],
@@ -194,12 +193,12 @@ class CardDatabase:
                 data["price"],
                 data["quantity"],
                 data["rarity"],
-                card_id,
-            ),
+                card_id
+            )
         )
         self.conn.commit()
         return self.get_card(card_id)
 
     def delete_card(self, card_id):
-        self.conn.execute("DELETE FROM cards WHERE id=?", (card_id,))
+        self.conn.execute("DELETE FROM cards WHERE id = ?", (card_id,))
         self.conn.commit()

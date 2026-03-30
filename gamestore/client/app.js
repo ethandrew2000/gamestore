@@ -1,7 +1,6 @@
 const API_BASE = "http://localhost:5000";
 const CARDS_URL = `${API_BASE}/cards`;
 
-// Session helpers
 function getSessionId() {
     return localStorage.getItem("session_id");
 }
@@ -25,8 +24,14 @@ function isLoggedIn() {
     return !!getSessionId();
 }
 
-// Authenticated fetch wrapper
-function authFetch(url, options = {}) {
+function isAdmin() {
+    const user = getUser();
+    return !!user && user.role === "admin";
+}
+
+function authFetch(url, options) {
+    options = options || {};
+
     const session_id = getSessionId();
     const headers = Object.assign(
         { "Content-Type": "application/json" },
@@ -37,38 +42,53 @@ function authFetch(url, options = {}) {
         headers["X-Session-ID"] = session_id;
     }
 
-    return fetch(url, Object.assign({}, options, { headers }));
+    return fetch(url, Object.assign({}, options, { headers: headers }));
 }
 
-// Nav update
 function updateNav() {
     const loggedIn = isLoggedIn();
+    const admin = isAdmin();
     const user = getUser();
 
-    document.querySelectorAll("[data-auth='true']").forEach(el => {
+    document.querySelectorAll("[data-auth='true']").forEach(function (el) {
         el.style.display = loggedIn ? "" : "none";
     });
 
-    document.querySelectorAll("[data-auth='false']").forEach(el => {
+    document.querySelectorAll("[data-auth='false']").forEach(function (el) {
         el.style.display = loggedIn ? "none" : "";
+    });
+
+    document.querySelectorAll("[data-role='admin']").forEach(function (el) {
+        el.style.display = admin ? "" : "none";
     });
 
     const greeting = document.getElementById("userGreeting");
     if (greeting && user) {
-        greeting.textContent = `Welcome, ${user.first_name}!`;
+        greeting.textContent = "Welcome, " + user.first_name + " (" + user.role + ")";
         greeting.style.display = "";
     } else if (greeting) {
         greeting.style.display = "none";
     }
 }
 
-function requireLogin(redirectTo = "login.html") {
+function requireLogin(redirectTo) {
+    if (!redirectTo) redirectTo = "login.html";
     if (!isLoggedIn()) {
         window.location.href = redirectTo;
     }
 }
 
-// Register
+function requireAdmin() {
+    if (!isLoggedIn()) {
+        window.location.href = "login.html";
+        return;
+    }
+
+    if (!isAdmin()) {
+        window.location.href = "user.html";
+    }
+}
+
 function setupRegisterForm() {
     const form = document.getElementById("registerForm");
     if (!form) return;
@@ -89,8 +109,12 @@ function setupRegisterForm() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(userData)
         })
-        .then(res => res.json().then(data => ({ ok: res.ok, data })))
-        .then(result => {
+        .then(function (res) {
+            return res.json().then(function (data) {
+                return { ok: res.ok, status: res.status, data: data };
+            });
+        })
+        .then(function (result) {
             if (result.ok) {
                 showMessage("registerMsg", "Registration successful! Redirecting to login...", "success");
                 form.reset();
@@ -101,19 +125,23 @@ function setupRegisterForm() {
                 showMessage("registerMsg", result.data.error || "Registration failed.", "error");
             }
         })
-        .catch(() => {
+        .catch(function () {
             showMessage("registerMsg", "Could not connect to server.", "error");
         });
     });
 }
 
-// Login
 function setupLoginForm() {
     const form = document.getElementById("loginForm");
     if (!form) return;
 
     if (isLoggedIn()) {
-        window.location.href = "user.html";
+        const user = getUser();
+        if (user && user.role === "admin") {
+            window.location.href = "index.html";
+        } else {
+            window.location.href = "user.html";
+        }
         return;
     }
 
@@ -131,45 +159,58 @@ function setupLoginForm() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(credentials)
         })
-        .then(res => res.json().then(data => ({ ok: res.ok, data })))
-        .then(result => {
+        .then(function (res) {
+            return res.json().then(function (data) {
+                return { ok: res.ok, status: res.status, data: data };
+            });
+        })
+        .then(function (result) {
             if (result.ok) {
                 saveSession(result.data.session_id, result.data.user);
                 showMessage("loginMsg", "Login successful! Redirecting...", "success");
+
                 setTimeout(function () {
-                    window.location.href = "user.html";
+                    if (result.data.user.role === "admin") {
+                        window.location.href = "index.html";
+                    } else {
+                        window.location.href = "user.html";
+                    }
                 }, 1000);
             } else {
                 showMessage("loginMsg", result.data.error || "Login failed.", "error");
             }
         })
-        .catch(() => {
+        .catch(function () {
             showMessage("loginMsg", "Could not connect to server.", "error");
         });
     });
 }
 
-// Logout
 function logout() {
     authFetch(`${API_BASE}/auth/logout`, { method: "POST" })
-        .catch(() => {})
+        .catch(function () {})
         .finally(function () {
             clearSession();
             window.location.href = "login.html";
         });
 }
 
-// Inventory table view (index.html)
 function loadCards() {
     authFetch(CARDS_URL)
-        .then(res => {
+        .then(function (res) {
             if (res.status === 401) {
                 window.location.href = "login.html";
                 return null;
             }
+
+            if (res.status === 403) {
+                window.location.href = "user.html";
+                return null;
+            }
+
             return res.json();
         })
-        .then(cards => {
+        .then(function (cards) {
             if (!cards) return;
 
             const tbody = document.getElementById("cardTableBody");
@@ -177,7 +218,7 @@ function loadCards() {
 
             tbody.innerHTML = "";
 
-            cards.forEach(card => {
+            cards.forEach(function (card) {
                 const row = document.createElement("tr");
                 row.innerHTML = `
                     <td>${card.name}</td>
@@ -192,10 +233,11 @@ function loadCards() {
                 tbody.appendChild(row);
             });
         })
-        .catch(err => console.error("Error loading cards:", err));
+        .catch(function (err) {
+            console.error("Error loading cards:", err);
+        });
 }
 
-// Public storefront grid (user.html)
 function loadCardGrid() {
     const container = document.getElementById("cardContainer");
     if (!container) return;
@@ -204,17 +246,16 @@ function loadCardGrid() {
 
     fetch(CARDS_URL, {
         headers: {
-            "Content-Type": "application/json",
-            ...(getSessionId() ? { "X-Session-ID": getSessionId() } : {})
+            "Content-Type": "application/json"
         }
     })
-    .then(res => {
+    .then(function (res) {
         if (!res.ok) {
             throw new Error("Failed to load cards");
         }
         return res.json();
     })
-    .then(cards => {
+    .then(function (cards) {
         container.innerHTML = "";
 
         if (!cards || cards.length === 0) {
@@ -222,49 +263,56 @@ function loadCardGrid() {
             return;
         }
 
-        cards.forEach(card => {
+        cards.forEach(function (card) {
             const div = document.createElement("div");
             div.className = "inventory-card";
             div.innerHTML = `
                 <h2>${card.name}</h2>
                 <p><strong>Set:</strong> ${card.set_name}</p>
                 <p><strong>Condition:</strong> ${card.condition}</p>
-                <p><strong>Rarity:</strong> ${card.rarity}</p>
                 <p><strong>Price:</strong> $${parseFloat(card.price).toFixed(2)}</p>
                 <p><strong>Quantity:</strong> ${card.quantity}</p>
+                <p><strong>Rarity:</strong> ${card.rarity}</p>
             `;
             container.appendChild(div);
         });
     })
-    .catch(err => {
+    .catch(function (err) {
         console.error("Error loading card grid:", err);
         container.innerHTML = "<p style='color:red;'>Could not load inventory.</p>";
     });
 }
 
-// Delete
 function deleteCard(id) {
+    if (!isAdmin()) return;
     if (!confirm("Are you sure you want to delete this card?")) return;
 
     authFetch(`${CARDS_URL}/${id}`, {
         method: "DELETE"
     })
-    .then(res => {
+    .then(function (res) {
         if (res.status === 401) {
             window.location.href = "login.html";
             return;
         }
+
+        if (res.status === 403) {
+            window.location.href = "user.html";
+            return;
+        }
+
         loadCards();
     })
-    .catch(err => console.error("Error deleting card:", err));
+    .catch(function (err) {
+        console.error("Error deleting card:", err);
+    });
 }
 
-// Edit button goes to add page in edit mode
 function editCard(id) {
+    if (!isAdmin()) return;
     window.location.href = `add.html?id=${id}`;
 }
 
-// Add/Edit form
 function setupForm() {
     const form = document.getElementById("cardForm");
     if (!form) return;
@@ -297,40 +345,50 @@ function setupForm() {
             method: method,
             body: JSON.stringify(cardData)
         })
-        .then(res => {
+        .then(function (res) {
             if (res.status === 401) {
                 window.location.href = "login.html";
                 return;
             }
+
+            if (res.status === 403) {
+                window.location.href = "user.html";
+                return;
+            }
+
             window.location.href = "index.html";
         })
-        .catch(err => console.error("Error saving card:", err));
+        .catch(function (err) {
+            console.error("Error saving card:", err);
+        });
     });
 }
 
 function loadCardIntoForm(id) {
-    authFetch(`${CARDS_URL}/${id}`)
-        .then(res => {
-            if (res.status === 401) {
-                window.location.href = "login.html";
-                return null;
-            }
-            return res.json();
-        })
-        .then(card => {
-            if (!card) return;
-
-            document.getElementById("name").value = card.name;
-            document.getElementById("set_name").value = card.set_name;
-            document.getElementById("condition").value = card.condition;
-            document.getElementById("price").value = card.price;
-            document.getElementById("quantity").value = card.quantity;
-            document.getElementById("rarity").value = card.rarity;
-        })
-        .catch(err => console.error("Error loading card:", err));
+    fetch(`${CARDS_URL}/${id}`, {
+        headers: {
+            "Content-Type": "application/json"
+        }
+    })
+    .then(function (res) {
+        if (!res.ok) {
+            throw new Error("Failed to load card");
+        }
+        return res.json();
+    })
+    .then(function (card) {
+        document.getElementById("name").value = card.name;
+        document.getElementById("set_name").value = card.set_name;
+        document.getElementById("condition").value = card.condition;
+        document.getElementById("price").value = card.price;
+        document.getElementById("quantity").value = card.quantity;
+        document.getElementById("rarity").value = card.rarity;
+    })
+    .catch(function (err) {
+        console.error("Error loading card:", err);
+    });
 }
 
-// Messages
 function showMessage(elementId, text, type) {
     const el = document.getElementById(elementId);
     if (!el) return;
@@ -348,14 +406,13 @@ function clearMessage(elementId) {
     el.style.display = "none";
 }
 
-// Boot
 document.addEventListener("DOMContentLoaded", function () {
     updateNav();
 
     const page = document.body.dataset.page;
 
     if (page === "inventory") {
-        requireLogin();
+        requireAdmin();
         loadCards();
     }
 
@@ -364,7 +421,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     if (page === "add") {
-        requireLogin();
+        requireAdmin();
         setupForm();
     }
 

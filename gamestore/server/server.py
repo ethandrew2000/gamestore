@@ -5,10 +5,6 @@ import functools
 app = Flask(__name__)
 db = CardDatabase()
 
-# ──────────────────────────────────────────────
-#  CORS
-# ──────────────────────────────────────────────
-
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -35,29 +31,40 @@ def handle_preflight(path):
     return apply_cors(response)
 
 
-# ──────────────────────────────────────────────
-#  Auth decorator
-# ──────────────────────────────────────────────
-
 def require_auth(f):
-    """Reject requests that don't carry a valid session ID."""
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         session_id = request.headers.get("X-Session-ID")
         if not session_id:
             return jsonify({"error": "Authentication required"}), 401
+
         user = db.get_session(session_id)
         if not user:
             return jsonify({"error": "Invalid or expired session"}), 401
-        # Attach current user to request context for downstream use
+
         request.current_user = user
         return f(*args, **kwargs)
     return wrapper
 
 
-# ──────────────────────────────────────────────
-#  User Registration
-# ──────────────────────────────────────────────
+def require_admin(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        session_id = request.headers.get("X-Session-ID")
+        if not session_id:
+            return jsonify({"error": "Authentication required"}), 401
+
+        user = db.get_session(session_id)
+        if not user:
+            return jsonify({"error": "Invalid or expired session"}), 401
+
+        if user.get("role") != "admin":
+            return jsonify({"error": "Admin access required"}), 403
+
+        request.current_user = user
+        return f(*args, **kwargs)
+    return wrapper
+
 
 @app.route("/users", methods=["POST"])
 def register_user():
@@ -77,12 +84,11 @@ def register_user():
     if user is None:
         return jsonify({"error": "Email is already registered"}), 409
 
-    return jsonify({"message": "User registered successfully", "user": user}), 201
+    return jsonify({
+        "message": "User registered successfully",
+        "user": user
+    }), 201
 
-
-# ──────────────────────────────────────────────
-#  Authentication (Login / Logout)
-# ──────────────────────────────────────────────
 
 @app.route("/auth/login", methods=["POST"])
 def login():
@@ -101,10 +107,11 @@ def login():
         return jsonify({"error": "Invalid email or password"}), 401
 
     session_id = db.create_session(user)
+
     return jsonify({
         "message": "Login successful",
         "session_id": session_id,
-        "user": user,
+        "user": user
     }), 200
 
 
@@ -116,17 +123,13 @@ def logout():
     return jsonify({"message": "Logged out successfully"}), 200
 
 
-# ──────────────────────────────────────────────
-#  Cards (protected)
-# ──────────────────────────────────────────────
-
+# Public card browsing
 @app.route("/cards", methods=["GET"])
 def list_cards():
     return jsonify(db.get_all_cards())
 
 
 @app.route("/cards/<int:card_id>", methods=["GET"])
-@require_auth
 def get_card(card_id):
     card = db.get_card(card_id)
     if card:
@@ -134,42 +137,43 @@ def get_card(card_id):
     return jsonify({"error": "Card not found"}), 404
 
 
+# Admin-only inventory management
 @app.route("/cards", methods=["POST"])
-@require_auth
+@require_admin
 def create_card():
     data = request.json
     if not data:
         return jsonify({"error": "Missing JSON body"}), 400
+
     card = db.create_card(data)
     return jsonify(card), 201
 
 
 @app.route("/cards/<int:card_id>", methods=["PUT"])
-@require_auth
+@require_admin
 def update_card(card_id):
     data = request.json
     if not data:
         return jsonify({"error": "Missing JSON body"}), 400
+
     card = db.get_card(card_id)
     if not card:
         return jsonify({"error": "Card not found"}), 404
+
     updated_card = db.update_card(card_id, data)
-    return jsonify(updated_card)
+    return jsonify(updated_card), 200
 
 
 @app.route("/cards/<int:card_id>", methods=["DELETE"])
-@require_auth
+@require_admin
 def delete_card(card_id):
     card = db.get_card(card_id)
     if not card:
         return jsonify({"error": "Card not found"}), 404
+
     db.delete_card(card_id)
     return jsonify({"message": "Card deleted successfully"}), 200
 
-
-# ──────────────────────────────────────────────
-#  Error handlers
-# ──────────────────────────────────────────────
 
 @app.errorhandler(404)
 def not_found(e):
@@ -180,10 +184,6 @@ def not_found(e):
 def method_not_allowed(e):
     return jsonify({"error": "Method not allowed"}), 405
 
-
-# ──────────────────────────────────────────────
-#  Run
-# ──────────────────────────────────────────────
 
 if __name__ == "__main__":
     app.run(debug=True)
