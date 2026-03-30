@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register – Card Store</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="register">
+
+<header class="hero-header">
+    <div class="hero-title">
+        <h1>Card Store</h1>
+        <p class="tagline">Manage and Explore Your Collection</p>
+    </div>
+    <nav class="hero-nav">
+        <a href="user.html"     class="nav-link">Home</a>
+        <a href="index.html"    class="nav-link" data-auth="true"  style="display:none">Inventory</a>
+        <a href="add.html"      class="nav-link" data-auth="true"  style="display:none">Add Card</a>
+        <a href="login.html"    class="nav-link" data-auth="false">Login</a>
+        <a href="register.html" class="nav-link" data-auth="false">Register</a>
+        <span id="userGreeting" class="user-greeting" style="display:none"></span>
+        <button id="logoutBtn"  class="nav-link btn-logout" data-auth="true" style="display:none">Logout</button>
+    </nav>
+</header>
+
+<main class="auth-main">
+    <form id="registerForm" class="auth-form">
+        <h2>Create Account</h2>
+        <p class="auth-sub">Join to start managing your collection</p>
+
+        <div id="registerMsg" class="msg" style="display:none"></div>
+
+        <div class="form-row">
+            <div class="form-col">
+                <label>First Name</label>
+                <input type="text" id="first_name" placeholder="Jane" required>
+            </div>
+            <div class="form-col">
+                <label>Last Name</label>
+                <input type="text" id="last_name" placeholder="Smith" required>
+            </div>
+        </div>
+
+        <label>Email</label>
+        <input type="email" id="email" placeholder="you@example.com" required>
+
+        <label>Password <span class="hint">(min. 8 characters)</span></label>
+        <input type="password" id="password" placeholder="••••••••" required minlength="8">
+
+        <button type="submit" class="btn">Create Account</button>
+
+        <p class="auth-footer">
+            Already have an account? <a href="login.html">Sign in here</a>
+        </p>
+    </form>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Card Inventory – Card Store</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="inventory">
+
+<header class="hero-header">
+    <div class="hero-title">
+        <h1>Card Store</h1>
+        <p class="tagline">Manage and Explore Your Collection</p>
+    </div>
+    <nav class="hero-nav">
+        <a href="user.html"     class="nav-link">Home</a>
+        <a href="index.html"    class="nav-link" data-auth="true"  style="display:none">Inventory</a>
+        <a href="add.html"      class="nav-link" data-auth="true"  style="display:none">Add Card</a>
+        <a href="login.html"    class="nav-link" data-auth="false">Login</a>
+        <a href="register.html" class="nav-link" data-auth="false">Register</a>
+        <span id="userGreeting" class="user-greeting" style="display:none"></span>
+        <button id="logoutBtn"  class="nav-link btn-logout" data-auth="true" style="display:none">Logout</button>
+    </nav>
+</header>
+
+<main>
+    <table id="cardTable">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Set</th>
+                <th>Price</th>
+                <th>Quantity</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="cardTableBody">
+            <!-- rows injected by JS -->
+        </tbody>
+    </table>
+
+    <!-- Inline edit panel lives outside the table to keep valid HTML -->
+    <div id="editRow" style="display:none;" class="inline-edit-panel">
+        <form id="inlineEditForm" class="inline-form">
+            <input type="hidden" id="editId">
+            <input type="text"   id="editName"      placeholder="Name"      required>
+            <input type="text"   id="editSet"       placeholder="Set"       required>
+            <input type="text"   id="editCondition" placeholder="Condition" required>
+            <input type="number" id="editPrice"     placeholder="Price"     step="0.01" required>
+            <input type="number" id="editQuantity"  placeholder="Quantity"  required>
+            <input type="text"   id="editRarity"    placeholder="Rarity"    required>
+            <button type="submit">Save</button>
+            <button type="button" id="cancelEdit">Cancel</button>
+        </form>
+    </div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

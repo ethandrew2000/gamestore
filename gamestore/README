@@ -1,0 +1,133 @@
+# Card Store
+
+A full-stack trading card collection manager built with Python (Flask) and vanilla HTML/CSS/JavaScript.
+
+---
+
+## Resources
+
+### User
+| Attribute      | Type   | Description                          |
+|----------------|--------|--------------------------------------|
+| id             | int    | Primary key (auto-increment)         |
+| first_name     | text   | User's first name                    |
+| last_name      | text   | User's last name                     |
+| email          | text   | Unique email address (lowercase)     |
+| password_hash  | text   | PBKDF2-HMAC-SHA256 hash + salt       |
+
+### Card
+| Attribute  | Type  | Description                      |
+|------------|-------|----------------------------------|
+| id         | int   | Primary key (auto-increment)     |
+| name       | text  | Card name                        |
+| set_name   | text  | Set the card belongs to          |
+| condition  | text  | Card condition (e.g. NM, LP)     |
+| price      | real  | Card price in USD                |
+| quantity   | int   | Quantity in stock                |
+| rarity     | text  | Card rarity (e.g. Rare, Common)  |
+
+---
+
+## Database Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    first_name    TEXT    NOT NULL,
+    last_name     TEXT    NOT NULL,
+    email         TEXT    NOT NULL UNIQUE,
+    password_hash TEXT    NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS cards (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    name      TEXT,
+    set_name  TEXT,
+    condition TEXT,
+    price     REAL,
+    quantity  INTEGER,
+    rarity    TEXT
+);
+```
+
+---
+
+## REST API Endpoints
+
+### Auth & Users
+
+| Name            | Method | Path           | Auth Required | Description                                  |
+|-----------------|--------|----------------|---------------|----------------------------------------------|
+| Register user   | POST   | `/users`        | No            | Create a new user account                    |
+| Login           | POST   | `/auth/login`   | No            | Authenticate and receive a session ID        |
+| Logout          | POST   | `/auth/logout`  | No            | Destroy the current session                  |
+
+#### POST `/users` — Request body
+```json
+{
+  "first_name": "Jane",
+  "last_name": "Smith",
+  "email": "jane@example.com",
+  "password": "secret123"
+}
+```
+Returns `201` with user object on success; `409` if email already exists.
+
+#### POST `/auth/login` — Request body
+```json
+{ "email": "jane@example.com", "password": "secret123" }
+```
+Returns `200` with `{ session_id, user }` on success; `401` on failure.
+
+### Cards (all require `X-Session-ID` header)
+
+| Name         | Method | Path               | Description                  |
+|--------------|--------|--------------------|------------------------------|
+| List cards   | GET    | `/cards`            | Retrieve all cards            |
+| Get card     | GET    | `/cards/<id>`       | Retrieve a single card        |
+| Create card  | POST   | `/cards`            | Add a new card                |
+| Update card  | PUT    | `/cards/<id>`       | Update an existing card       |
+| Delete card  | DELETE | `/cards/<id>`       | Delete a card                 |
+
+All card endpoints return `401 Unauthorized` if `X-Session-ID` is missing or invalid.
+
+---
+
+## Password Hashing
+
+| Parameter  | Value                        |
+|------------|------------------------------|
+| Algorithm  | PBKDF2-HMAC-SHA256           |
+| Iterations | 260,000                      |
+| Salt       | 32 bytes (cryptographically random, `os.urandom`) |
+| Storage    | `<hex-salt>$<hex-digest>` stored in `password_hash` column |
+| Comparison | `secrets.compare_digest` (timing-safe) |
+
+Python's built-in `hashlib.pbkdf2_hmac` is used — no third-party libraries required. The plain-text password is never stored or logged.
+
+---
+
+## Session Store
+
+Sessions are held in an **in-memory Python dictionary** (`SESSION_STORE`) on the server keyed by a 64-character cryptographically random hex token (`secrets.token_hex(32)`).
+
+The session ID is stored in **`localStorage`** on the client and sent with every protected request via the `X-Session-ID` HTTP header.
+
+### User Preferences
+The following preferences persist in `localStorage` regardless of login state:
+
+| Preference  | Key          | Options              |
+|-------------|--------------|----------------------|
+| Color mode  | `colorMode`  | `light`, `dark`      |
+| View type   | `viewType`   | `grid`, `table`      |
+
+---
+
+## Running the App
+
+```bash
+pip install flask
+python server.py
+```
+
+Open any `.html` file in a browser (or serve with a static server). The API runs at `http://localhost:5000`.

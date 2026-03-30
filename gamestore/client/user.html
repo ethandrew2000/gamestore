@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Home – Card Store</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="home">
+
+<header class="hero-header">
+    <div class="hero-title">
+        <h1>Card Store</h1>
+        <p class="tagline">Manage and Explore Your Collection</p>
+    </div>
+    <nav class="hero-nav">
+        <a href="user.html"     class="nav-link">Home</a>
+        <a href="index.html"    class="nav-link" data-auth="true"  style="display:none">Inventory</a>
+        <a href="add.html"      class="nav-link" data-auth="true"  style="display:none">Add Card</a>
+        <a href="login.html"    class="nav-link" data-auth="false">Login</a>
+        <a href="register.html" class="nav-link" data-auth="false">Register</a>
+        <span id="userGreeting" class="user-greeting" style="display:none"></span>
+        <button id="logoutBtn"  class="nav-link btn-logout" data-auth="true" style="display:none">Logout</button>
+    </nav>
+</header>
+
+<main>
+    <section class="guest-message" style="margin-top:0; margin-bottom:24px;">
+        <h2>Welcome to Card Store</h2>
+        <p><a href="login.html">Log in</a> or <a href="register.html">create an account</a> to manage inventory.</p>
+    </section>
+
+    <div id="cardContainer" class="card-grid"></div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

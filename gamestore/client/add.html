@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add Card – Card Store</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="add">
+
+<header class="hero-header">
+    <div class="hero-title">
+        <h1>Card Store</h1>
+        <p class="tagline">Manage and Explore Your Collection</p>
+    </div>
+    <nav class="hero-nav">
+        <a href="user.html"     class="nav-link">Home</a>
+        <a href="index.html"    class="nav-link" data-auth="true"  style="display:none">Inventory</a>
+        <a href="add.html"      class="nav-link" data-auth="true"  style="display:none">Add Card</a>
+        <a href="login.html"    class="nav-link" data-auth="false">Login</a>
+        <a href="register.html" class="nav-link" data-auth="false">Register</a>
+        <span id="userGreeting" class="user-greeting" style="display:none"></span>
+        <button id="logoutBtn"  class="nav-link btn-logout" data-auth="true" style="display:none">Logout</button>
+    </nav>
+</header>
+
+<main>
+    <h2 id="formTitle" style="text-align:center; color:#2c4a36; margin-top:20px;">Add New Card</h2>
+    <form id="cardForm">
+        <input type="hidden" id="cardId">
+
+        <label>Name</label>
+        <input type="text" id="name" required>
+
+        <label>Set</label>
+        <input type="text" id="set_name" required>
+
+        <label>Condition</label>
+        <input type="text" id="condition" required>
+
+        <label>Price</label>
+        <input type="number" step="0.01" id="price" required>
+
+        <label>Quantity</label>
+        <input type="number" id="quantity" required>
+
+        <label>Rarity</label>
+        <input type="text" id="rarity" required>
+
+        <button type="submit" class="btn">Save Card</button>
+    </form>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
